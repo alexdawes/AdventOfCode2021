@@ -1,0 +1,5 @@
+Java/out/**
+C#/**/bin
+C#/**/obj
+**/.idea/**
+**/.vs/**
