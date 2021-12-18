@@ -37,7 +37,7 @@ public class Day17 {
         return possibilities
                 .parallelStream()
                 .filter(p -> trench.Test(p.getX(), p.getY()))
-                .reduce(0, (a, b) -> a + 1, Integer::sum);
+                .count();
     }
 
     public static Trench getTrench() throws Exception {
