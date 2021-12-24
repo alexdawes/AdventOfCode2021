@@ -1,148 +1,247 @@
 package day23.models;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class Burrow {
+    private Room[] rooms;
+    private Hall hall;
+    private int energy;
 
-    private List<Amphipod> amphipods;
+    private Integer heuristic;
 
-    public Burrow(List<Amphipod> amphipods) {
-        for (var amph : amphipods) {
-            amph.setBurrow(this);
+    public Burrow(Room[] rooms) {
+        this(new Hall(), rooms, 0);
+    }
+
+    private Burrow(Hall hall, Room[] rooms, int energy) {
+        this.rooms = rooms;
+        this.hall = hall;
+        this.energy = energy;
+    }
+
+    public boolean isComplete() {
+        for (var room : rooms) {
+            if (!room.isFinished()) {
+                return false;
+            }
         }
-        this.amphipods = amphipods;
+        return true;
+    }
+
+    public int getEnergy() {
+        return energy;
     }
 
     public Burrow clone() {
-        var newAmphs = new ArrayList<Amphipod>();
-        for (var amph : amphipods) {
-            newAmphs.add(amph.clone());
+        var newRooms = new Room[rooms.length];
+        for (var i = 0; i < rooms.length; i++) {
+            newRooms[i] = rooms[i].clone();;
         }
-        return new Burrow(newAmphs);
+
+        return new Burrow(hall.clone(), newRooms, energy);
     }
 
-    @Override
-    public String toString() {
-        var sb = new StringBuilder();
-        sb.append("#############\n");
-
-        sb.append("#");
-        for (var i = 0; i < 11; i++) {
-            var a = getAmphipodAt(BurrowRoom.Main, i);
-            sb.append(a == null ? "." : a.toShortString());
+    public int getHeuristic() {
+        if (heuristic == null) {
+            heuristic = (getEstimate() + getEnergy());
         }
-        sb.append("#\n");
-
-        sb.append("###");
-        var a1 = getAmphipodAt(BurrowRoom.Side1, 0);
-        sb.append(a1 == null ? "." : a1.toShortString());
-        sb.append("#");
-        var b1 = getAmphipodAt(BurrowRoom.Side2, 0);
-        sb.append(b1 == null ? "." : b1.toShortString());
-        sb.append("#");
-        var c1 = getAmphipodAt(BurrowRoom.Side3, 0);
-        sb.append(c1 == null ? "." : c1.toShortString());
-        sb.append("#");
-        var d1 = getAmphipodAt(BurrowRoom.Side4, 0);
-        sb.append(d1 == null ? "." : d1.toShortString());
-        sb.append("###\n");
-
-
-        sb.append("  #");
-        var a2 = getAmphipodAt(BurrowRoom.Side1, 1);
-        sb.append(a2 == null ? "." : a2.toShortString());
-        sb.append("#");
-        var b2 = getAmphipodAt(BurrowRoom.Side2, 1);
-        sb.append(b2 == null ? "." : b2.toShortString());
-        sb.append("#");
-        var c2 = getAmphipodAt(BurrowRoom.Side3, 1);
-        sb.append(c2 == null ? "." : c2.toShortString());
-        sb.append("#");
-        var d2 = getAmphipodAt(BurrowRoom.Side4, 1);
-        sb.append(d2 == null ? "." : d2.toShortString());
-        sb.append("#  \n");
-
-        sb.append("  #########  \n");
-
-        return sb.toString();
+        return heuristic;
     }
 
-    public Long solveLeastEnergy() {
-        if (amphipods.stream().allMatch(a -> a.isFinished())) {
-            return 0L;
-        }
+    public int getEstimate() {
+        var total = 0;
 
-        var moves = new ArrayList<AmphipodMove>();
-        for (var amph : amphipods) {
-            var amphMoves = amph.getAvailableMoves();
-            for (var amphMove : amphMoves) {
-                var move = new AmphipodMove(amph, amphMove);
-                moves.add(move);
+        for (var i = 0; i < hall.size(); i++) {
+            var amph = hall.get(i);
+            if (amph != null) {
+                var type = amph.getType();
+                var targetRoom = getRoom(type);
+                var index = targetRoom.getIndex();
+                var dist = Math.abs(i - index);
+                var energyCost = amph.getEnergyCost();
+                total += energyCost * (dist + targetRoom.size());
             }
         }
 
-        if (moves.size() == 0) {
-            return null;
+        for (var room : rooms) {
+            for (var i = 0; i < room.size(); i++) {
+                var done = true;
+                for (var j = i; j < room.size(); j++) {
+                    if (room.get(j) != null && room.get(j).getType() != room.getType()) {
+                        done = false;
+                        break;
+                    }
+                }
+
+                if (!done) {
+                    var amph = room.get(i);
+                    if (amph != null) {
+                        var energyCost = amph.getEnergyCost();
+                        var index = room.getIndex();
+                        var type = amph.getType();
+                        var targetRoom = getRoom(type);
+                        var dist = Math.abs(index - targetRoom.getIndex());
+                        total += energyCost * (room.size() + targetRoom.size() + dist);
+                    }
+                }
+            }
         }
 
-        Long least = null;
-        for (var move : moves) {
-            var newBurrow = clone();
-            var amph = newBurrow.getAmphipodAt(move.getAmphipod().getPosition());
-            var cost = amph.move(move.getPosition());
-            var remaining = newBurrow.solveLeastEnergy();
-            if (remaining == null) {
-                continue;
-            }
-            var total = cost + remaining;
-            if (least == null || total < least) {
-                least = total;
-            }
-        }
-        return least;
+        return total;
     }
 
-    public Amphipod getAmphipodAt(BurrowPosition position) {
-        for (var amph : amphipods) {
-            if (amph.getPosition().equals(position)) {
-                return amph;
+    public Room getRoom(AmphipodType type) {
+        for (var room : rooms) {
+            if (room.getType() == type) {
+                return room;
             }
         }
         return null;
     }
 
-    public Amphipod getAmphipodAt(BurrowRoom room, int position) {
-        return getAmphipodAt(new BurrowPosition(room, position));
-    }
-
-    public boolean isOccupied(BurrowPosition position) {
-        return getAmphipodAt(position) != null;
-    }
-
-    public boolean isOccupied(BurrowRoom room, int position) {
-        return isOccupied(new BurrowPosition(room, position));
-    }
-
     public static Burrow parse(List<String> lines) {
-        var a1 = Amphipod.parse(lines.get(2).charAt(3), new BurrowPosition(BurrowRoom.Side1, 0));
-        var a2 = Amphipod.parse(lines.get(3).charAt(3), new BurrowPosition(BurrowRoom.Side1, 1));
-        var b1 = Amphipod.parse(lines.get(2).charAt(5), new BurrowPosition(BurrowRoom.Side2, 0));
-        var b2 = Amphipod.parse(lines.get(3).charAt(5), new BurrowPosition(BurrowRoom.Side2, 1));
-        var c1 = Amphipod.parse(lines.get(2).charAt(7), new BurrowPosition(BurrowRoom.Side3, 0));
-        var c2 = Amphipod.parse(lines.get(3).charAt(7), new BurrowPosition(BurrowRoom.Side3, 1));
-        var d1 = Amphipod.parse(lines.get(2).charAt(9), new BurrowPosition(BurrowRoom.Side4, 0));
-        var d2 = Amphipod.parse(lines.get(3).charAt(9), new BurrowPosition(BurrowRoom.Side4, 1));
+        var roomSize = lines.size() - 3;
 
-        var lst = new ArrayList<Amphipod>();
-        lst.add(a1);
-        lst.add(a2);
-        lst.add(b1);
-        lst.add(b2);
-        lst.add(c1);
-        lst.add(c2);
-        lst.add(d1);
-        lst.add(d2);
-        return new Burrow(lst);
+        var aRoom = new Room(roomSize, AmphipodType.Amber, 2);
+        var bRoom = new Room(roomSize, AmphipodType.Bronze, 4);
+        var cRoom = new Room(roomSize, AmphipodType.Copper, 6);
+        var dRoom = new Room(roomSize, AmphipodType.Desert, 8);
+
+        for (var i = 0; i < roomSize; i++) {
+            var a = Amphipod.parse(lines.get(i + 2).charAt(3));
+            var b = Amphipod.parse(lines.get(i + 2).charAt(5));
+            var c = Amphipod.parse(lines.get(i + 2).charAt(7));
+            var d = Amphipod.parse(lines.get(i + 2).charAt(9));
+            aRoom.put(i, a);
+            bRoom.put(i, b);
+            cRoom.put(i, c);
+            dRoom.put(i, d);
+        }
+        Room[] rooms = { aRoom, bRoom, cRoom, dRoom };
+        return new Burrow(rooms);
+    }
+
+    @Override
+    public String toString() {
+        var sb = new StringBuilder();
+
+        sb.append("#############\n");
+
+        sb.append("#");
+        for (var i = 0; i < hall.size(); i++) {
+            sb.append(hall.get(i) != null ? hall.get(i).toString() : ".");
+        }
+        sb.append("#\n");
+
+        var roomSize = rooms[0].size();
+        for (var i = 0; i < roomSize; i++) {
+            sb.append(i == 0 ? "###" : "  #");
+            for (var j = 0; j < rooms.length; j++) {
+                var room = rooms[j];
+                var amph = room.get(i);
+                sb.append(amph != null ? amph.toString() : ".");
+                if (j != rooms.length - 1) {
+                    sb.append("#");
+                }
+            }
+            sb.append(i == 0 ? "###\n" : "#\n");
+        }
+
+        sb.append("  #########\n");
+        return sb.toString();
+    }
+
+    public void addEnergy(int value) {
+        energy += value;
+    }
+
+    public List<Burrow> getNext() {
+        var result = new ArrayList<Burrow>();
+        for (var room : rooms) {
+            try {
+                var clone = this.clone();
+                var cloneRoom = clone.getRoom(room.getType());
+                var index = cloneRoom.getIndex();
+                var out = new Out<Amphipod>(null);
+                var energy = cloneRoom.pop(out);
+                var amph = out.value;
+                var type = amph.getType();
+
+                int[] indices = {0,1,3,5,7,9,10};
+                for (var i : indices) {
+                    try {
+                        var clone2 = clone.clone();
+                        if (index < i) {
+                            for (var j = index + 1; j <= i; j++) {
+                                if (clone2.hall.get(j) != null) {
+                                    throw new Exception("Cannot walk");
+                                }
+                            }
+                        }
+                        else {
+                            for (var j = index - 1; j >= i; j--) {
+                                if (clone2.hall.get(j) != null) {
+                                    throw new Exception("Cannot walk");
+                                }
+                            }
+                        }
+
+                        var dist = Math.abs(index - i);
+                        var energyCost = amph.getEnergyCost();
+
+                        var energyTotal = energy + (dist * energyCost);
+                        clone2.addEnergy(energyTotal);
+                        clone2.hall.put(i, amph);
+                        result.add(clone2);
+                    }
+                    catch (Exception e) {
+                    }
+                }
+            }
+            catch (Exception e) {
+            }
+        }
+
+        for (var i = 0; i < hall.size(); i++) {
+            var amph = hall.get(i);
+            if (amph != null) {
+                try {
+                    var clone = this.clone();
+                    var type = amph.getType();
+                    var targetRoom = clone.getRoom(type);
+                    var index = targetRoom.getIndex();
+
+                    if (i < index) {
+                        for (var j = i + 1; j <= index; j++) {
+                            if (clone.hall.get(j) != null) {
+                                throw new Exception("Cannot walk");
+                            }
+                        }
+                    }
+                    else {
+                        for (var j = i - 1; j >= index; j--) {
+                            if (clone.hall.get(j) != null) {
+                                throw new Exception("Cannot walk");
+                            }
+                        }
+                    }
+
+                    var dist = Math.abs(i - index);
+                    var energyCost = amph.getEnergyCost();
+                    var energyTotal = (dist * energyCost) + targetRoom.push(amph);
+                    clone.hall.remove(i);
+                    clone.addEnergy(energyTotal);
+                    result.add(clone);
+                }
+                catch(Exception e) {
+
+                }
+            }
+        }
+
+        return result;
     }
 }
